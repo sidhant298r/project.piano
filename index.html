@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Piano Lockstep (Guaranteed)</title>
+  <title>Piano Lockstep – Calibration</title>
 
   <style>
     body {
@@ -11,140 +11,133 @@
       font-family: Arial, sans-serif;
       text-align: center;
     }
+
+    #container {
+      position: relative;
+      width: 640px;
+      margin: auto;
+    }
+
     #player {
-      margin-top: 20px;
+      width: 640px;
+      height: 390px;
     }
-    button {
-      margin-top: 15px;
-      padding: 12px 20px;
-      font-size: 16px;
-      cursor: pointer;
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 640px;
+      height: 390px;
+      cursor: crosshair;
     }
+
     #status {
       margin-top: 15px;
       font-size: 18px;
       color: #00ff99;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 18px;
+      font-size: 15px;
     }
   </style>
 </head>
 
 <body>
 
-<h2>🎹 Piano YouTube Lockstep</h2>
+<h2>🎹 Piano Lockstep – Calibration</h2>
 
-<div id="player"></div>
+<div id="container">
+  <div id="player"></div>
+  <canvas id="overlay"></canvas>
+</div>
 
-<button onclick="startLearning()">▶ START LEARNING</button>
+<button onclick="resetCalibration()">Reset Calibration</button>
 
-<div id="status">Click START to begin</div>
+<div id="status">Click LEFTMOST piano key</div>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
   let player;
-  let engineStarted = false;
+  const canvas = document.getElementById("overlay");
+  const ctx = canvas.getContext("2d");
 
-  // VERY OBVIOUS PAUSE POINTS (for testing)
-  const noteSequence = [
-    { time: 5, note: 60 },
-    { time: 8, note: 62 },
-    { time: 11, note: 64 }
-  ];
+  let step = 0;
+  const calibration = {};
 
-  let idx = 0;
-  let waiting = false;
-  let expectedNote = null;
+  canvas.width = 640;
+  canvas.height = 390;
 
-  /* ======================
-     YOUTUBE PLAYER
-     ====================== */
   function onYouTubeIframeAPIReady() {
     player = new YT.Player("player", {
-      height: "390",
-      width: "640",
       videoId: "IRJHv0o76u4",
-      playerVars: {
-        controls: 1,
-        mute: 1   // 🔑 critical for autoplay reliability
-      },
-      events: {
-        onReady: () => update("Player ready")
-      }
+      width: 640,
+      height: 390,
+      playerVars: { controls: 1 }
     });
   }
 
-  /* ======================
-     USER START (MANDATORY)
-     ====================== */
-  function startLearning() {
-    if (engineStarted) return;
-    engineStarted = true;
+  canvas.addEventListener("click", e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
-    initMIDI();
-
-    player.playVideo(); // user gesture → allowed
-    update("▶ Playing…");
-
-    setInterval(engineLoop, 50);
-  }
-
-  /* ======================
-     AUTO-PAUSE ENGINE
-     ====================== */
-  function engineLoop() {
-    if (!player || waiting) return;
-
-    const t = player.getCurrentTime();
-    const next = noteSequence[idx];
-    if (!next) return;
-
-    if (t >= next.time) {
-      waiting = true;
-      expectedNote = next.note;
-
-      player.pauseVideo();
-      update(`🎹 PLAY MIDI NOTE ${expectedNote}`);
-
-      idx++;
-    }
-  }
-
-  /* ======================
-     MIDI INPUT
-     ====================== */
-  function initMIDI() {
-    if (!navigator.requestMIDIAccess) {
-      update("❌ Web MIDI not supported");
-      return;
+    if (step === 0) {
+      calibration.leftX = x;
+      update("Click RIGHTMOST piano key");
+    } 
+    else if (step === 1) {
+      calibration.rightX = x;
+      update("Click HIT LINE (where bars touch keys)");
+    } 
+    else if (step === 2) {
+      calibration.hitY = y;
+      saveCalibration();
+      update("✅ Calibration complete!");
+      drawCalibration();
     }
 
-    navigator.requestMIDIAccess().then(midi => {
-      for (let input of midi.inputs.values()) {
-        input.onmidimessage = onMIDI;
-      }
-      update("🎹 MIDI connected");
-    });
+    step++;
+  });
+
+  function drawCalibration() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "red";
+    ctx.beginPath();
+    ctx.moveTo(calibration.leftX, 0);
+    ctx.lineTo(calibration.leftX, canvas.height);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(calibration.rightX, 0);
+    ctx.lineTo(calibration.rightX, canvas.height);
+    ctx.stroke();
+
+    ctx.strokeStyle = "yellow";
+    ctx.beginPath();
+    ctx.moveTo(0, calibration.hitY);
+    ctx.lineTo(canvas.width, calibration.hitY);
+    ctx.stroke();
   }
 
-  function onMIDI(e) {
-    const [status, note, velocity] = e.data;
+  function saveCalibration() {
+    localStorage.setItem("pianoCalibration", JSON.stringify(calibration));
+  }
 
-    if (status === 144 && velocity > 0 && waiting) {
-      if (note === expectedNote) {
-        waiting = false;
-        expectedNote = null;
-
-        update("✅ Correct → continuing");
-        player.playVideo();
-      } else {
-        update(`❌ Wrong note (${note})`);
-      }
-    }
+  function resetCalibration() {
+    localStorage.removeItem("pianoCalibration");
+    step = 0;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    update("Click LEFTMOST piano key");
   }
 
   function update(msg) {
     document.getElementById("status").innerText = msg;
-    console.log(msg);
   }
 </script>
 
