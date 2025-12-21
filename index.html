@@ -1,21 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Piano YouTube Lockstep</title>
+  <meta charset="utf-8">
+  <title>Piano Lockstep (Guaranteed)</title>
 
   <style>
     body {
-      background: #0d0d0d;
-      color: #ffffff;
+      background: #0b0b0b;
+      color: white;
       font-family: Arial, sans-serif;
       text-align: center;
     }
-
     #player {
       margin-top: 20px;
     }
-
+    button {
+      margin-top: 15px;
+      padding: 12px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
     #status {
       margin-top: 15px;
       font-size: 18px;
@@ -26,118 +30,121 @@
 
 <body>
 
-<h2>🎹 Piano YouTube Lockstep Learning</h2>
+<h2>🎹 Piano YouTube Lockstep</h2>
 
 <div id="player"></div>
-<div id="status">Loading…</div>
+
+<button onclick="startLearning()">▶ START LEARNING</button>
+
+<div id="status">Click START to begin</div>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
   let player;
+  let engineStarted = false;
 
-  /* ===============================
-     NOTE SEQUENCE (EDIT THIS)
-     =============================== */
+  // VERY OBVIOUS PAUSE POINTS (for testing)
   const noteSequence = [
-    { time: 2.0, note: 64 }, // E
-    { time: 3.0, note: 67 }, // G
-    { time: 4.0, note: 69 }, // A
-    { time: 5.0, note: 67 },
-    { time: 6.0, note: 64 }
+    { time: 5, note: 60 },
+    { time: 8, note: 62 },
+    { time: 11, note: 64 }
   ];
 
-  let index = 0;
-  let waitingForNote = false;
+  let idx = 0;
+  let waiting = false;
   let expectedNote = null;
-  let videoStarted = false;
 
-  /* ===============================
+  /* ======================
      YOUTUBE PLAYER
-     =============================== */
+     ====================== */
   function onYouTubeIframeAPIReady() {
     player = new YT.Player("player", {
       height: "390",
       width: "640",
       videoId: "IRJHv0o76u4",
-      playerVars: { controls: 1 },
+      playerVars: {
+        controls: 1,
+        mute: 1   // 🔑 critical for autoplay reliability
+      },
       events: {
-        onReady: onPlayerReady,
-        onStateChange: onPlayerStateChange
+        onReady: () => update("Player ready")
       }
     });
   }
 
-  function onPlayerReady() {
-    updateStatus("🎬 Press Play on the video");
+  /* ======================
+     USER START (MANDATORY)
+     ====================== */
+  function startLearning() {
+    if (engineStarted) return;
+    engineStarted = true;
+
     initMIDI();
+
+    player.playVideo(); // user gesture → allowed
+    update("▶ Playing…");
+
+    setInterval(engineLoop, 50);
   }
 
-  function onPlayerStateChange(event) {
-    if (event.data === YT.PlayerState.PLAYING && !videoStarted) {
-      videoStarted = true;
-      updateStatus("▶️ Video running...");
-      startAutoPauseEngine();
+  /* ======================
+     AUTO-PAUSE ENGINE
+     ====================== */
+  function engineLoop() {
+    if (!player || waiting) return;
+
+    const t = player.getCurrentTime();
+    const next = noteSequence[idx];
+    if (!next) return;
+
+    if (t >= next.time) {
+      waiting = true;
+      expectedNote = next.note;
+
+      player.pauseVideo();
+      update(`🎹 PLAY MIDI NOTE ${expectedNote}`);
+
+      idx++;
     }
   }
 
-  /* ===============================
-     AUTO PAUSE ENGINE
-     =============================== */
-  function startAutoPauseEngine() {
-    setInterval(() => {
-      if (!player || waitingForNote) return;
-
-      const currentTime = player.getCurrentTime();
-      const next = noteSequence[index];
-      if (!next) return;
-
-      if (currentTime >= next.time) {
-        expectedNote = next.note;
-        waitingForNote = true;
-
-        player.pauseVideo();
-        updateStatus(`🎹 Play MIDI note ${expectedNote}`);
-        index++;
-      }
-    }, 50);
-  }
-
-  /* ===============================
+  /* ======================
      MIDI INPUT
-     =============================== */
+     ====================== */
   function initMIDI() {
     if (!navigator.requestMIDIAccess) {
-      updateStatus("❌ Web MIDI not supported");
+      update("❌ Web MIDI not supported");
       return;
     }
 
     navigator.requestMIDIAccess().then(midi => {
       for (let input of midi.inputs.values()) {
-        input.onmidimessage = onMIDIMessage;
+        input.onmidimessage = onMIDI;
       }
-      updateStatus("🎹 MIDI connected. Press Play.");
+      update("🎹 MIDI connected");
     });
   }
 
-  function onMIDIMessage(event) {
-    const [status, note, velocity] = event.data;
+  function onMIDI(e) {
+    const [status, note, velocity] = e.data;
 
-    if (status === 144 && velocity > 0 && waitingForNote) {
+    if (status === 144 && velocity > 0 && waiting) {
       if (note === expectedNote) {
-        waitingForNote = false;
+        waiting = false;
         expectedNote = null;
 
-        updateStatus("✅ Correct! Continuing...");
+        update("✅ Correct → continuing");
         player.playVideo();
       } else {
-        updateStatus(`❌ Wrong note (${note}). Try again`);
+        update(`❌ Wrong note (${note})`);
       }
     }
   }
 
-  function updateStatus(text) {
-    document.getElementById("status").innerText = text;
+  function update(msg) {
+    document.getElementById("status").innerText = msg;
+    console.log(msg);
   }
 </script>
 
