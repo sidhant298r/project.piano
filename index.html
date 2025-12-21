@@ -12,16 +12,12 @@
       text-align: center;
     }
 
-    h2 {
-      margin-top: 20px;
-    }
-
     #player {
       margin-top: 20px;
     }
 
     #status {
-      margin-top: 20px;
+      margin-top: 15px;
       font-size: 18px;
       color: #00ff99;
     }
@@ -33,75 +29,83 @@
 <h2>🎹 Piano YouTube Lockstep Learning</h2>
 
 <div id="player"></div>
+<div id="status">Loading…</div>
 
-<div id="status">Initializing…</div>
-
-<!-- YouTube IFrame API -->
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <script>
   let player;
 
-  // 🔹 DEFINE NOTE SEQUENCE (MVP)
-  // time = seconds in video
-  // note = MIDI note number
+  /* ===============================
+     NOTE SEQUENCE (EDIT THIS)
+     =============================== */
   const noteSequence = [
-    { time: 1.5, note: 64 }, // E
-    { time: 2.4, note: 67 }, // G
-    { time: 3.2, note: 69 }, // A
-    { time: 4.0, note: 67 }, // G
-    { time: 4.8, note: 64 }  // E
+    { time: 2.0, note: 64 }, // E
+    { time: 3.0, note: 67 }, // G
+    { time: 4.0, note: 69 }, // A
+    { time: 5.0, note: 67 },
+    { time: 6.0, note: 64 }
   ];
 
-  let currentIndex = 0;
+  let index = 0;
   let waitingForNote = false;
   let expectedNote = null;
+  let videoStarted = false;
 
-  // 🔹 YOUTUBE PLAYER INIT
+  /* ===============================
+     YOUTUBE PLAYER
+     =============================== */
   function onYouTubeIframeAPIReady() {
     player = new YT.Player("player", {
       height: "390",
       width: "640",
-      videoId: "IRJHv0o76u4", // your video
-      playerVars: {
-        controls: 1
-      },
+      videoId: "IRJHv0o76u4",
+      playerVars: { controls: 1 },
       events: {
-        onReady: onPlayerReady
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange
       }
     });
   }
 
   function onPlayerReady() {
-    updateStatus("🎧 Video loaded. Waiting for MIDI…");
-    player.pauseVideo();
+    updateStatus("🎬 Press Play on the video");
     initMIDI();
-
-    // ⏱️ Check video time every 50ms
-    setInterval(checkVideoTime, 50);
   }
 
-  // 🔹 AUTO-PAUSE ENGINE
-  function checkVideoTime() {
-    if (!player || waitingForNote) return;
-
-    const currentTime = player.getCurrentTime();
-    const nextEvent = noteSequence[currentIndex];
-
-    if (!nextEvent) return;
-
-    if (currentTime >= nextEvent.time) {
-      expectedNote = nextEvent.note;
-      waitingForNote = true;
-
-      player.pauseVideo();
-      updateStatus(`🎹 Play MIDI note: ${expectedNote}`);
-
-      currentIndex++;
+  function onPlayerStateChange(event) {
+    if (event.data === YT.PlayerState.PLAYING && !videoStarted) {
+      videoStarted = true;
+      updateStatus("▶️ Video running...");
+      startAutoPauseEngine();
     }
   }
 
-  // 🔹 MIDI HANDLING
+  /* ===============================
+     AUTO PAUSE ENGINE
+     =============================== */
+  function startAutoPauseEngine() {
+    setInterval(() => {
+      if (!player || waitingForNote) return;
+
+      const currentTime = player.getCurrentTime();
+      const next = noteSequence[index];
+      if (!next) return;
+
+      if (currentTime >= next.time) {
+        expectedNote = next.note;
+        waitingForNote = true;
+
+        player.pauseVideo();
+        updateStatus(`🎹 Play MIDI note ${expectedNote}`);
+        index++;
+      }
+    }, 50);
+  }
+
+  /* ===============================
+     MIDI INPUT
+     =============================== */
   function initMIDI() {
     if (!navigator.requestMIDIAccess) {
       updateStatus("❌ Web MIDI not supported");
@@ -119,21 +123,19 @@
   function onMIDIMessage(event) {
     const [status, note, velocity] = event.data;
 
-    // NOTE ON
     if (status === 144 && velocity > 0 && waitingForNote) {
       if (note === expectedNote) {
         waitingForNote = false;
         expectedNote = null;
 
-        updateStatus("✅ Correct! Continuing…");
+        updateStatus("✅ Correct! Continuing...");
         player.playVideo();
       } else {
-        updateStatus(`❌ Wrong note (${note}). Try again.`);
+        updateStatus(`❌ Wrong note (${note}). Try again`);
       }
     }
   }
 
-  // 🔹 STATUS HELPER
   function updateStatus(text) {
     document.getElementById("status").innerText = text;
   }
