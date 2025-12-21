@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Piano Lockstep – Calibration (Fixed)</title>
+  <title>Piano Lockstep – Calibration (Click Fixed)</title>
 
   <style>
     body {
@@ -18,16 +18,17 @@
       margin: auto;
     }
 
-    #player iframe {
-      width: 100%;
-      height: 390px;
+    #player {
+      position: relative;
+      z-index: 1;
     }
 
     #overlay {
       position: absolute;
       top: 0;
       left: 0;
-      pointer-events: auto;
+      z-index: 10;           /* 🔑 CRITICAL FIX */
+      pointer-events: auto; /* 🔑 CRITICAL FIX */
       cursor: crosshair;
     }
 
@@ -71,12 +72,11 @@
     hitY: null
   };
 
-  /* ======================
-     YOUTUBE INIT
-     ====================== */
   function onYouTubeIframeAPIReady() {
     player = new YT.Player("player", {
       videoId: "IRJHv0o76u4",
+      width: 640,
+      height: 390,
       playerVars: { controls: 1 },
       events: {
         onReady: onPlayerReady
@@ -90,9 +90,6 @@
     update("Click LEFTMOST piano key");
   }
 
-  /* ======================
-     CANVAS SETUP (FIXED)
-     ====================== */
   function setupCanvas() {
     canvas = document.getElementById("overlay");
     ctx = canvas.getContext("2d");
@@ -115,11 +112,15 @@
 
     if (step === 0) {
       calibration.leftX = x;
+      drawDot(x, y);
       update("Click RIGHTMOST piano key");
-    } else if (step === 1) {
+    } 
+    else if (step === 1) {
       calibration.rightX = x;
+      drawDot(x, y);
       update("Click HIT LINE (where bars touch keys)");
-    } else if (step === 2) {
+    } 
+    else if (step === 2) {
       calibration.hitY = y;
       saveCalibration();
       drawCalibration();
@@ -129,9 +130,13 @@
     step++;
   }
 
-  /* ======================
-     DRAWING
-     ====================== */
+  function drawDot(x, y) {
+    ctx.fillStyle = "lime";
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function drawCalibration() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -155,9 +160,6 @@
     ctx.stroke();
   }
 
-  /* ======================
-     STORAGE
-     ====================== */
   function saveCalibration() {
     localStorage.setItem("pianoCalibration", JSON.stringify(calibration));
   }
@@ -166,8 +168,7 @@
     const saved = localStorage.getItem("pianoCalibration");
     if (!saved) return;
 
-    const data = JSON.parse(saved);
-    Object.assign(calibration, data);
+    Object.assign(calibration, JSON.parse(saved));
     step = 3;
     drawCalibration();
     update("✅ Calibration loaded");
