@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Piano YouTube Lockstep MVP</title>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: Arial;
+      text-align: center;
+    }
+    #player {
+      margin-top: 20px;
+    }
+    #status {
+      margin-top: 15px;
+      font-size: 18px;
+      color: #00ff99;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🎹 Piano YouTube Lockstep (MVP)</h2>
+
+<div id="player"></div>
+
+<div id="status">Waiting for MIDI…</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<script>
+  let player;
+  let expectedNote = 60; // Middle C for MVP
+
+  // 1️⃣ Load YouTube Player
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('player', {
+      height: '390',
+      width: '640',
+      videoId: 'IRJHv0o76u4', // Your video
+      playerVars: {
+        controls: 1
+      },
+      events: {
+        onReady: onPlayerReady
+      }
+    });
+  }
+
+  function onPlayerReady() {
+    document.getElementById("status").innerText =
+      "Press MIDI note " + expectedNote + " to continue";
+    player.pauseVideo();
+    initMIDI();
+  }
+
+  // 2️⃣ MIDI Input
+  function initMIDI() {
+    if (!navigator.requestMIDIAccess) {
+      alert("Web MIDI not supported");
+      return;
+    }
+
+    navigator.requestMIDIAccess().then(midi => {
+      for (let input of midi.inputs.values()) {
+        input.onmidimessage = onMIDIMessage;
+      }
+    });
+  }
+
+  function onMIDIMessage(event) {
+    const [status, note, velocity] = event.data;
+
+    if (status === 144 && velocity > 0) {
+      if (note === expectedNote) {
+        document.getElementById("status").innerText =
+          "✅ Correct! Resuming video...";
+        player.playVideo();
+      } else {
+        document.getElementById("status").innerText =
+          "❌ Wrong note (" + note + "), try again";
+      }
+    }
+  }
+</script>
+
+</body>
+</html>
